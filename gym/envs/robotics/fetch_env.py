@@ -52,11 +52,26 @@ class FetchEnv(robot_env.RobotEnv):
 
     def compute_reward(self, achieved_goal, goal, info):
         # Compute distance between goal and the achieved goal.
+        # penalize if the arm is to far from the goal 
+        init_pos = self.initial_gripper_xpos
+        cur_grip_position = self.sim.data.get_site_xpos('robot0:grip')
+        reward = 0
+        
+        if cur_grip_position[0] > 1.4:
+            reward = reward -20
+
+        elif cur_grip_position[1] > 1. or cur_grip_position[1] < -1.:
+            reward = reward -20
+        
+        elif cur_grip_position[2] > 0.8:
+            reward = reward -20
+                
+
         d = goal_distance(achieved_goal, goal)
         if self.reward_type == 'sparse':
-            return -(d > self.distance_threshold).astype(np.float32)
+            return reward - (d > self.distance_threshold).astype(np.float32)
         else:
-            return -d
+            return reward-d
 
     # RobotEnv methods
     # ----------------------------
@@ -87,6 +102,7 @@ class FetchEnv(robot_env.RobotEnv):
     def _get_obs(self):
         # positions
         grip_pos = self.sim.data.get_site_xpos('robot0:grip')
+        print('grip_pos', grip_pos)
         dt = self.sim.nsubsteps * self.sim.model.opt.timestep
         grip_velp = self.sim.data.get_site_xvelp('robot0:grip') * dt
         robot_qpos, robot_qvel = utils.robot_get_obs(self.sim)
@@ -131,7 +147,7 @@ class FetchEnv(robot_env.RobotEnv):
 
     def _render_callback(self):
         # Visualize target.
-        sites_offset = (self.sim.data.site_xpos - self.sim.model.site_pos).copy()
+        sites_offset = (self.sim.data.site_xpos - self.sim.model.site_pos).copy()       
         site_id = self.sim.model.site_name2id('target0')
         self.sim.model.site_pos[site_id] = self.goal - sites_offset[0]
         self.sim.forward()
@@ -166,6 +182,7 @@ class FetchEnv(robot_env.RobotEnv):
     def _is_success(self, achieved_goal, desired_goal):
         d = goal_distance(achieved_goal, desired_goal)
         return (d < self.distance_threshold).astype(np.float32)
+
 
     def _env_setup(self, initial_qpos):
         for name, value in initial_qpos.items():
