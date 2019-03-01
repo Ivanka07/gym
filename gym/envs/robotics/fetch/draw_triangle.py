@@ -6,6 +6,7 @@ import numpy as np
 import xml.etree.ElementTree as ET
 from xml.etree.ElementTree import Element, SubElement, Comment, tostring
 
+
 # Ensure we get the path separator correct on windows
 MODEL_XML_PATH = os.path.join('fetch', 'draw_triangle.xml')
 fullpath = os.path.join(os.path.dirname(__file__), '../assets', MODEL_XML_PATH)
@@ -28,9 +29,8 @@ def distance_goal(goal_a, goal_b):
 
 
 
-def ids_to_pos(body_names, body_pos, goal_tag='foo'):
+def ids_to_pos(body_names, body_pos, goal_tag='goal'):
     assert len(body_names) == len(body_pos), 'Expected equal length of body_names and body_pos'
-
     goals_to_pos = {}
     for i in range(len(body_names)):
         name = body_names[i]
@@ -38,7 +38,6 @@ def ids_to_pos(body_names, body_pos, goal_tag='foo'):
         if goal_tag in name:
             goals_to_pos[name] = pos           
     return goals_to_pos
-
 
 
 
@@ -53,7 +52,7 @@ class Goal():
 
 
 class FetchDrawTriangleEnv(fetch_env.FetchEnv, utils.EzPickle):
-    def __init__(self, reward_type='sparse', num_goals=3):
+    def __init__(self, reward_type='sparse', num_goals=9):
         initial_qpos = {
             'robot0:slide0': 0.4049,
             'robot0:slide1': 0.48,
@@ -62,15 +61,16 @@ class FetchDrawTriangleEnv(fetch_env.FetchEnv, utils.EzPickle):
 
         self.num_goals = num_goals
         self.goals = []
-        self.reward = 0
+        self.ep_reward = 0
         self.reach_factor = 0.75
+        self.last_reached_goal = -1
 
         print('MODEL_XML_PATH', MODEL_XML_PATH)
         fetch_env.FetchEnv.__init__(
             self, MODEL_XML_PATH, has_object=False, block_gripper=True, n_substeps=20,
             gripper_extra_height=0.2, target_in_the_air=True, target_offset=0.0,
-            obj_range=0.15, target_range=0.15, distance_threshold=0.05,
-            initial_qpos=initial_qpos, reward_type=reward_type)
+            obj_range=0.15, target_range=0.15, distance_threshold=0.1,
+            initial_qpos=initial_qpos, reward_type=reward_type, gripper_rot=[1., 0., 0., 0.])
         utils.EzPickle.__init__(self)
         #self.initial_gripper_xpos = self.sim.data.get_site_xpos('robot0:grip').copy()
         self._sample_goals()
@@ -80,15 +80,12 @@ class FetchDrawTriangleEnv(fetch_env.FetchEnv, utils.EzPickle):
     def _render_callback(self):
         print('Rendering callback')
         sites_offset = (self.sim.data.site_xpos - self.sim.model.site_pos).copy()
-       # print('Sites offsets', sites_offset)
-       # print('self.sim.data.site_xpos', self.sim.data.site_xpos)
-       # print('self.sim.model.site_pos', self.sim.model.site_pos)
-      #  print('Sites offsets = ',sites_offset)
         for i in range(self.num_goals):
             site_id = self.sim.model.site_name2id('target'+str(i))
             self.sim.model.site_pos[site_id] =  self.goals[i].position - sites_offset[i] 
        #     print('self.sim.model.site_pos[site_id]', self.sim.model.site_pos[site_id])
         self.sim.forward()
+
 
 
     def _sample_goals(self):
@@ -99,9 +96,9 @@ class FetchDrawTriangleEnv(fetch_env.FetchEnv, utils.EzPickle):
         self.goals = []
         for k,v in names_to_pos.items():
             random = np.random.uniform(-0.015, 0.015, size=3)
-            v[0] =  self.initial_gripper_xpos[0] + v[0]/6.0 + random[0]
+            v[0] =  self.initial_gripper_xpos[0] + v[0]/3.5 + random[0]
             v[1] =  self.initial_gripper_xpos[1] + v[1]/1.2 + random[1]
-            v[2] =  self.initial_gripper_xpos[2] + v[2]/2.0 + random[2]      
+            v[2] =  self.initial_gripper_xpos[2] + v[2]/2.5 + random[2]      
             goal_obj = Goal(k, v, False)
             self.goals.append(goal_obj)
         return self.goals
@@ -130,8 +127,8 @@ class FetchDrawTriangleEnv(fetch_env.FetchEnv, utils.EzPickle):
                     desired_goals.append(g1)
                 
                 if g.reached:
-                    for g1 in goal:
-                        achieved_goals.append(g1)
+                    for g_el in goal:
+                        achieved_goals.append(g_el)
                 else:
                     achieved_goals.append(0)
                     achieved_goals.append(0)
@@ -152,40 +149,38 @@ class FetchDrawTriangleEnv(fetch_env.FetchEnv, utils.EzPickle):
         '''
         has_to_be_reached = self.reach_factor * self.num_goals
 
-        if has_to_be_reached <= self.reward:
-            print('Consider as done! Reward=', self.reward)
-        return has_to_be_reached <= self.reward
+        if has_to_be_reached <= self.ep_reward:
+            print('Consider as done! Reward=', self.ep_reward)
+        return has_to_be_reached <= self.ep_reward
 
 
-    def compute_reward(self, obs, goals, info):
-        """Reward is given for a perforing basic motion trajectory .
-           R is given for every reached goal in the trajectory. We
-           give additianal penalty if grip position is far from the 
-           object to the left or right side of the robot in order
-           to focuse only on the center of the range 
-        """
-        
+    def compute_reward(self, achieved_goal, goal, info):
+        # Compute distance between goal and the achieved goal.
+        # todo: penalize if the arm is to far from the goal 
+        #store in self.last_reached_goal id of the last reached goal
+        reward = self.ep_reward
+        print('Computing reward for drawing trinagle')
         grip_pos = self.sim.data.get_site_xpos('robot0:grip')
-        print('Grip position = ', grip_pos)
+        cur_grip_position = self.sim.data.get_site_xpos('robot0:grip')
+        print('distance_threshold', self.distance_threshold)
         
-        reward = 0.0
-        factor = -1.0
-        only_first_unreached = True
-        for i in range(self.num_goals):
-            dist = distance_goal(grip_pos, self.goals[i].position)
-            print('Distance to the goal with id={} is {}'.format(self.goals[i].id, dist))
-            print('Is the goal with id={} reached {}'.format(self.goals[i].id, self.goals[i].reached))               
-            if not self.goals[i].reached:
-                if dist < 0.1: #self.distance_threshold:
-                    #reward += 1.0
+        for i in range(len(self.goals)):
+            goal = self.goals[i]
+            print('Considering goal = ', goal.id, ' is goal reached? = ', goal.reached)
+            if not goal.reached and goal.id == (self.last_reached_goal + 1):
+                dist_to_goal = distance_goal(grip_pos, goal.position)
+                print('Dist to goal=', dist_to_goal)
+                if dist_to_goal < self.distance_threshold:
+                    print('Reached goal with id =', goal.id)
                     self.goals[i].reached = True
-                    reward = 0.0
+                    self.last_reached_goal = goal.id
+                    reward +=1
+                    break
                 else:
-                    reward += dist * factor
-            #    only_first_unreached = False
-            else:
-                reward +=1           
-        
-        print('Reward computed = ', reward)
-        self.reward = reward
+                    reward = -1 * dist_to_goal
+
+
+        self.ep_reward = reward
+        print('Reward = ', reward)
         return reward
+ 

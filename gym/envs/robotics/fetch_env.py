@@ -15,7 +15,7 @@ class FetchEnv(robot_env.RobotEnv):
     def __init__(
         self, model_path, n_substeps, gripper_extra_height, block_gripper,
         has_object, target_in_the_air, target_offset, obj_range, target_range,
-        distance_threshold, initial_qpos, reward_type,
+        distance_threshold, initial_qpos, reward_type,gripper_rot=[1.0, 0.0, 1.0, 0.0]
     ):
         """Initializes a new Fetch environment.
 
@@ -34,7 +34,7 @@ class FetchEnv(robot_env.RobotEnv):
             reward_type ('sparse' or 'dense'): the reward type, i.e. sparse or dense
         """
         self.gripper_extra_height = gripper_extra_height
-        self.block_gripper = block_gripper
+        self.block_gripper = False#block_gripper
         self.has_object = has_object
         self.target_in_the_air = target_in_the_air
         self.target_offset = target_offset
@@ -42,6 +42,7 @@ class FetchEnv(robot_env.RobotEnv):
         self.target_range = target_range
         self.distance_threshold = distance_threshold
         self.reward_type = reward_type
+        self.gripper_rot = gripper_rot
 
         super(FetchEnv, self).__init__(
             model_path=model_path, n_substeps=n_substeps, n_actions=4,
@@ -88,7 +89,7 @@ class FetchEnv(robot_env.RobotEnv):
         pos_ctrl, gripper_ctrl = action[:3], action[3]
 
         pos_ctrl *= 0.05  # limit maximum change in position
-        rot_ctrl = [1., 0., 1., 0.]  # fixed rotation of the end effector, expressed as a quaternion
+        rot_ctrl = self.gripper_rot #[1., 0., 0., 0.]  # fixed rotation of the end effector, expressed as a quaternion
         gripper_ctrl = np.array([gripper_ctrl, gripper_ctrl])
         assert gripper_ctrl.shape == (2,)
         if self.block_gripper:
