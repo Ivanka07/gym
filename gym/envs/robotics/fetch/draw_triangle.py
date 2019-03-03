@@ -76,9 +76,11 @@ class FetchDrawTriangleEnv(fetch_env.FetchEnv, utils.EzPickle):
         self.num_goals = num_goals
         self.goals = []
         self.ep_reward = 0
-        self.reach_factor = 1.0
+
+        self.reach_factor = 0.9
         self.last_reached_goal = -1
         self.names_to_pos = {}
+        self.desired_goals = []
 
 
         print('MODEL_XML_PATH', MODEL_XML_PATH)
@@ -93,13 +95,6 @@ class FetchDrawTriangleEnv(fetch_env.FetchEnv, utils.EzPickle):
         self.initial_gripper_xpos = self.sim.data.get_site_xpos('robot0:grip').copy()
        # self._sample_goals()
 
-
-  #  def _render_callback(self):
-  #      # Visualize target.
-  #      sites_offset = (self.sim.data.site_xpos - self.sim.model.site_pos).copy()       
-  #      site_id = self.sim.model.site_name2id('target0')
-  #      self.sim.model.site_pos[site_id] = self.goal - sites_offset[0]
-  #      self.sim.forward()
 
 
     def _render_callback(self):
@@ -141,8 +136,8 @@ class FetchDrawTriangleEnv(fetch_env.FetchEnv, utils.EzPickle):
 
     def _get_obs(self):
        # self._sample_goals()
-        desired_goals = []
         achieved_goals = []
+        desired_goals = []
         grip_pos = self.sim.data.get_site_xpos('robot0:grip')
         dt = self.sim.nsubsteps * self.sim.model.opt.timestep
         grip_velp = self.sim.data.get_site_xvelp('robot0:grip') * dt
@@ -169,6 +164,7 @@ class FetchDrawTriangleEnv(fetch_env.FetchEnv, utils.EzPickle):
                     achieved_goals.append(0)
                     achieved_goals.append(0)
                     achieved_goals.append(0)
+        self.desired_goals = desired_goals
 
         return {
             'observation': obs.copy(),
@@ -184,9 +180,11 @@ class FetchDrawTriangleEnv(fetch_env.FetchEnv, utils.EzPickle):
         We will try soft condition: if 75% of all goals (scores) are reached -> done
         reward with additinal num_goals if all goals are reached
         '''
+        achieved = np.count_nonzero(np.array(achieved_goal)) / 3.0
+        print('Achieved =', achieved)
         has_to_be_reached = self.reach_factor * self.num_goals
-        if has_to_be_reached <= self.ep_reward:
-            print('Consider as done! Reward=', self.ep_reward)
+        if has_to_be_reached <= achieved:
+            print('Achieved goals =', achieved, ' consider as done!')
         return has_to_be_reached <= self.ep_reward
 
 
@@ -204,38 +202,28 @@ class FetchDrawTriangleEnv(fetch_env.FetchEnv, utils.EzPickle):
             did_reset_sim = self._reset_sim()
 
         obs = self._get_obs()
-        self.ep_reward = 0
         self.last_reached_goal = -1
         return obs
 
         
     def compute_reward(self, achieved_goal, goal, info):
-        # Compute distance between goal and the achieved goal.
-        # todo: penalize if the arm is to far from the goal 
-        #store in self.last_reached_goal id of the last reached goal
-        reward = self.ep_reward
-       # print('Computing reward for drawing trinagle')
+        achieved = np.count_nonzero(np.array(achieved_goal)) / 3.0
+        print(len(achieved_goal))
+        print('desired_goal', goal)
+        reward = achieved 
         grip_pos = self.sim.data.get_site_xpos('robot0:grip')
         cur_grip_position = self.sim.data.get_site_xpos('robot0:grip')
         
         for i in range(len(self.goals)):
             goal = self.goals[i]
             if not goal.reached and goal.id == (self.last_reached_goal + 1):
-        #        print('Considering goal = ', goal.id, ' is goal reached? = ', goal.reached)
                 dist_to_goal = distance_goal(grip_pos, goal.position)
-         #       print('Dist to goal=', dist_to_goal)
                 if dist_to_goal < self.distance_threshold:
-          #          print('Reached goal with id =', goal.id)
                     self.goals[i].reached = True
                     self.last_reached_goal = goal.id
-                    self.ep_reward +=1
                 else:
-                    reward = -1 * dist_to_goal
+                    reward = reward - dist_to_goal
                 break
-
-
-        reward = self.ep_reward + reward
-        #print('Reward = ', reward)
-        #print('Episode Reward = ', self.ep_reward)
+        print('[FetchDrawTriangleEnv] computing reward=', reward )
         return reward
  

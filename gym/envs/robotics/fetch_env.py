@@ -56,23 +56,12 @@ class FetchEnv(robot_env.RobotEnv):
         # penalize if the arm is to far from the goal 
         init_pos = self.initial_gripper_xpos
         cur_grip_position = self.sim.data.get_site_xpos('robot0:grip')
-        reward = 0
-        
-        if cur_grip_position[0] > 1.4:
-            reward = reward -20
-
-        elif cur_grip_position[1] > 1. or cur_grip_position[1] < -1.:
-            reward = reward -20
-        
-        elif cur_grip_position[2] > 0.8:
-            reward = reward -20
-                
 
         d = goal_distance(achieved_goal, goal)
         if self.reward_type == 'sparse':
-            return reward - (d > self.distance_threshold).astype(np.float32)
+            return  -(d > self.distance_threshold).astype(np.float32)
         else:
-            return reward-d
+            return  -d
 
     # RobotEnv methods
     # ----------------------------
@@ -103,7 +92,7 @@ class FetchEnv(robot_env.RobotEnv):
     def _get_obs(self):
         # positions
         grip_pos = self.sim.data.get_site_xpos('robot0:grip')
-        print('grip_pos', grip_pos)
+        #print('grip_pos', grip_pos)
         dt = self.sim.nsubsteps * self.sim.model.opt.timestep
         grip_velp = self.sim.data.get_site_xvelp('robot0:grip') * dt
         robot_qpos, robot_qvel = utils.robot_get_obs(self.sim)
@@ -154,6 +143,7 @@ class FetchEnv(robot_env.RobotEnv):
         self.sim.forward()
 
     def _reset_sim(self):
+        print('**************************** Reseting sim ****************************')
         self.sim.set_state(self.initial_state)
 
         # Randomize start position of object.

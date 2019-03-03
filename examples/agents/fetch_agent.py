@@ -4,7 +4,7 @@ from gym.spaces import Box, Discrete, Dict
 
 
 print('Current gym version =', gym.__version__)
-env = gym.make('FetchPickAndPlace-v1')
+env = gym.make('FetchReach-v1')
 obs = env.reset()
 print('Observation space= ', env.observation_space)
 print('Action space=', env.action_space.shape)

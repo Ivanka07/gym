@@ -40,13 +40,20 @@ def draw_triangle(env, lastObs):
     episodeObs = []
     episodeInfo = []
     i = 0
-
+    g = 0
     timeStep = 0 #count the total number of timesteps
     episodeObs.append(lastObs)
     
     while True:
+        print('i=',i)
         env.render()
-        a = desired_goals[i,:] - cur_grip_pos
+        
+        if i < 9:
+            g = i
+        else:
+            g = 0
+
+        a = desired_goals[g,:] - cur_grip_pos
         act = [a[0], a[1], a[2], 0.05]        
         
         newObs, reward, done, info = env.step(act)
@@ -60,7 +67,7 @@ def draw_triangle(env, lastObs):
         if done: 
             print('Episode length = ', timeStep)
              
-        if np.sum(achieved_goals[i,:]) > 0.0 and not done:
+        if np.sum(achieved_goals[g,:]) > 0.0 and not done:
             i = i+1
 
         episodeAcs.append(act)
