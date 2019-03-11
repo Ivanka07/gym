@@ -26,6 +26,7 @@ class RobotEnv(gym.GoalEnv):
         self.sim = mujoco_py.MjSim(model, nsubsteps=n_substeps)
         self.viewer = None
         self._viewers = {}
+        self.n_substeps = n_substeps
 
         self.metadata = {
             'render.modes': ['human', 'rgb_array'],
@@ -167,3 +168,9 @@ class RobotEnv(gym.GoalEnv):
         to enforce additional constraints on the simulation state.
         """
         pass
+
+    def reload_model(self, fullpath):
+        print('*****************************reloading_model**********************')
+        model = mujoco_py.load_model_from_path(fullpath)
+        self.sim = mujoco_py.MjSim(model, nsubsteps=self.n_substeps)
+
