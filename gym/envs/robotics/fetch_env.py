@@ -52,6 +52,7 @@ class FetchEnv(robot_env.RobotEnv):
     # ----------------------------
 
     def compute_reward(self, achieved_goal, goal, info):
+        print('goal', goal)
         # Compute distance between goal and the achieved goal.
         # penalize if the arm is to far from the goal 
         init_pos = self.initial_gripper_xpos
@@ -184,8 +185,8 @@ class FetchEnv(robot_env.RobotEnv):
         self.sim.forward()
         #1.8869 0.251641
         # Move end effector into position.
-        #gripper_target = np.array([-0.498, 0.005, -0.431 + self.gripper_extra_height]) + self.sim.data.get_site_xpos('robot0:grip')
-        gripper_target = np.array([0.8, 0.005, -0.431 + self.gripper_extra_height]) + self.sim.data.get_site_xpos('robot0:grip')
+        gripper_target = np.array([-0.498, 0.005, -0.431 + self.gripper_extra_height]) + self.sim.data.get_site_xpos('robot0:grip')
+        #gripper_target = np.array([0.8, 0.005, -0.431 + self.gripper_extra_height]) + self.sim.data.get_site_xpos('robot0:grip')
         gripper_rotation = np.array([1., 0., 1., 0.])
         self.sim.data.set_mocap_pos('robot0:mocap', gripper_target)
         self.sim.data.set_mocap_quat('robot0:mocap', gripper_rotation)

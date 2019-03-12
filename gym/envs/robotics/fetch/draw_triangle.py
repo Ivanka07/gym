@@ -1,6 +1,7 @@
 import os
 import gym
 from gym import utils
+#from gym.envs.robotics import rotations, robot_env, utils
 from gym.envs.robotics import fetch_env, rotations, robot_env
 import numpy as np
 import copy
@@ -87,7 +88,7 @@ class FetchDrawTriangleEnv(fetch_env.FetchEnv, utils.EzPickle):
         fetch_env.FetchEnv.__init__(
             self, MODEL_XML_PATH, has_object=False, block_gripper=True, n_substeps=20,
             gripper_extra_height=0.2, target_in_the_air=True, target_offset=0.0,
-            obj_range=0.15, target_range=0.15, distance_threshold=0.05,
+            obj_range=0.15, target_range=0.15, distance_threshold=0.08,
             initial_qpos=initial_qpos, reward_type=reward_type, gripper_rot=[1., 0., 0., 0.])
         utils.EzPickle.__init__(self)
         self.names_to_pos = copy.deepcopy(self.init_goals()) 
@@ -123,7 +124,7 @@ class FetchDrawTriangleEnv(fetch_env.FetchEnv, utils.EzPickle):
         self.goals = []
        # print('Pos in model ', self.init_goals())
         for k,v in self.initial_goals.items():
-            random = np.random.uniform(-0.005, 0.005, size=3)
+            random = np.random.uniform(-0.007, 0.007, size=3)
             v[0] =  v[0] #0.7 * (v[0]  + random[0]) + 0.6
             v[1] =  v[1] + random[1] #0.7 * (v[1]  + random[1]) + 0.4
             v[2] =  v[2] + random[2] #0.7 * (v[2] * 0.8  + random[2]) + 0.3
@@ -153,7 +154,6 @@ class FetchDrawTriangleEnv(fetch_env.FetchEnv, utils.EzPickle):
         else:
             for g in self.goals:
                 goal = [g.position[0], g.position[1], g.position[2]]
-                #print('Goal with id=',g.id, ' has a position=', goal)
                 for g1 in goal:
                     desired_goals.append(g1)
                 
@@ -164,12 +164,16 @@ class FetchDrawTriangleEnv(fetch_env.FetchEnv, utils.EzPickle):
                     achieved_goals.append(0)
                     achieved_goals.append(0)
                     achieved_goals.append(0)
+            
+            achieved_goals[24] = grip_pos[0]
+            achieved_goals[25] = grip_pos[1]
+            achieved_goals[26] = grip_pos[2]
         self.desired_goals = desired_goals
-
+        
         return {
             'observation': obs.copy(),
             'achieved_goal': np.array(achieved_goals),
-            'desired_goal': np.array(desired_goals),
+            'desired_goal': np.array(desired_goals).flatten(),
         }
 
 
@@ -181,7 +185,7 @@ class FetchDrawTriangleEnv(fetch_env.FetchEnv, utils.EzPickle):
         reward with additinal num_goals if all goals are reached
         '''
         achieved = np.count_nonzero(np.array(achieved_goal)) / 3.0
-        print('Achieved =', achieved)
+        print('[is_success] Achieved =', achieved)
         has_to_be_reached = self.reach_factor * self.num_goals
         if has_to_be_reached <= achieved:
             print('Achieved goals =', achieved, ' consider as done!')
@@ -207,13 +211,80 @@ class FetchDrawTriangleEnv(fetch_env.FetchEnv, utils.EzPickle):
 
         
     def compute_reward(self, achieved_goal, goal, info):
+        print('[FetchDrawTriangleEnv ]****************************computung rewards****************************')
+        reward = None
+
+        if achieved_goal.shape[0] > 27 :
+            print('[compute_reward] achieved goal shape', achieved_goal.shape)
+            reward = []
+            last_achieved_pos = 0 #we have 9 goals
+            number_of_achieved_goals = 0
+            r = 0
+            for ts in range(achieved_goal.shape[0]):
+
+                print('time step = ', ts)
+                ag = achieved_goal[ts,:]
+                dg = goal[ts,:]
+           #     print('AG', ag.shape)
+            #    print('DG', dg)
+                grip_pos = ag[24:29,]
+                dg_pos = []
+                
+                print('last_achieved_goal=', last_achieved_pos)
+                dg_pos.append(dg[last_achieved_pos])
+                dg_pos.append(dg[last_achieved_pos+1])
+                dg_pos.append(dg[last_achieved_pos+2])
+                print('Next desired position =', dg_pos)
+                dist_to_goal = distance_goal(grip_pos, dg_pos)
+                print('dist_to_goal', dist_to_goal)
+                
+                if dist_to_goal < self.distance_threshold and last_achieved_pos < 24:
+                    last_achieved_pos = last_achieved_pos + 3
+                    print('************************************** Achieved a goal **************************************')
+                    number_of_achieved_goals +=1                       
+                else:
+                    print('number of achieved goals = ', number_of_achieved_goals)
+                    r =  number_of_achieved_goals  - dist_to_goal
+                print('Reward = ', r)
+                reward.append(r)
+
+            #for ag in achieved_goal:
+             #   print('AG', ag.shape)
+              #  grip_pos = ag[24:29,]
+               # print('grip position= ', grip_pos)
+                #for dgi in range(0, 27, 3):
+                 #   dg = goal
+            reward = np.array(reward)
+
+        else:
+            achieved = np.count_nonzero(np.array(achieved_goal)) / 3.0
+            reward = achieved - 1
+            grip_pos = self.sim.data.get_site_xpos('robot0:grip')
+            cur_grip_position = self.sim.data.get_site_xpos('robot0:grip')
+
+            for i in range(len(self.goals)):
+                goal = self.goals[i]
+                if not goal.reached and goal.id == (self.last_reached_goal + 1):
+                    dist_to_goal = distance_goal(grip_pos, goal.position)
+                    if dist_to_goal < self.distance_threshold:
+                        self.goals[i].reached = True
+                        self.last_reached_goal = goal.id
+                    else:
+                        reward = reward - dist_to_goal
+                        break
+
+
+        print('[FetchDrawTriangleEnv] computing reward=', reward )
+        return reward
+ 
+
+    def reward_helper(self):
         achieved = np.count_nonzero(np.array(achieved_goal)) / 3.0
-        print(len(achieved_goal))
-        print('desired_goal', goal)
+        #print('[compute_reward] desired_goal', goal)
         reward = achieved 
         grip_pos = self.sim.data.get_site_xpos('robot0:grip')
         cur_grip_position = self.sim.data.get_site_xpos('robot0:grip')
-        
+
         for i in range(len(self.goals)):
             goal = self.goals[i]
             if not goal.reached and goal.id == (self.last_reached_goal + 1):
@@ -223,7 +294,4 @@ class FetchDrawTriangleEnv(fetch_env.FetchEnv, utils.EzPickle):
                     self.last_reached_goal = goal.id
                 else:
                     reward = reward - dist_to_goal
-                break
-        print('[FetchDrawTriangleEnv] computing reward=', reward )
-        return reward
- 
+                    break
