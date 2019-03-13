@@ -135,6 +135,9 @@ class Env(object):
         logger.warn("Could not seed environment %s", self)
         return
 
+    def set_object_pos(self, object_xpos):
+        pass
+
     @property
     def unwrapped(self):
         """Completely unwrap this env.
@@ -160,7 +163,7 @@ class GoalEnv(Env):
     actual observations of the environment as per usual.
     """
 
-    def reset(self):
+    def reset(self, object_xpos=None):
         # Enforce that each GoalEnv uses a Goal-compatible observation space.
         if not isinstance(self.observation_space, gym.spaces.Dict):
             raise error.Error('GoalEnv requires an observation space of type gym.spaces.Dict')
@@ -189,6 +192,10 @@ class GoalEnv(Env):
                 assert reward == env.compute_reward(ob['achieved_goal'], ob['goal'], info)
         """
         raise NotImplementedError()
+
+    def set_object_pos(self, object_xpos):
+        pass
+
 
 warn_once = True
 

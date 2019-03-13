@@ -16,7 +16,7 @@ def vectorize_obs(obs):
    
 def save():
 	#print('obs len', obs)
-	for filepath in glob.iglob('good_tr/*.npz'):
+	for filepath in glob.glob('pick_and_place/*.npz'):
 		print(filepath)
 		data = np.load(filepath)
 		o = data['obs']
@@ -32,7 +32,7 @@ def save():
 			print('ac', ac)
 			acs.append(ac)
 		print('acs len', len(acs))
-	np.savez_compressed('human_expert_reach.npz', obs=obs, acs=acs)
+	np.savez_compressed('human_expert_pick.npz', obs=obs, acs=acs)
 
 def load_and_concat(human, art):
 	obs = []
@@ -73,9 +73,9 @@ def load_and_concat(human, art):
 	print(acs.shape)
    # train_obs = obs_reshaped[int(test_data_length):,:]
    # test_obs = obs_reshaped[0:int(test_data_length),:]
-	np.savez_compressed('human_gym_expert_mix_reach_2000.npz', obs=obs, acs=acs)
+	np.savez_compressed('human_gym_expert_mix_pick_2000.npz', obs=obs, acs=acs)
+
+save()
 
 
-
-
-load_and_concat('human_expert_reach.npz', 'data_fetch_reach_random_2000.npz')
+#load_and_concat('human_expert_reach.npz', 'data_fetch_reach_random_2000.npz')

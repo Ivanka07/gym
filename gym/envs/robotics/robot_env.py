@@ -115,7 +115,7 @@ class RobotEnv(gym.GoalEnv):
     # Extension methods
     # ----------------------------
 
-    def _reset_sim(self):
+    def _reset_sim(self, object_xpos=None):
         """Resets a simulation and indicates whether or not it was successful.
         If a reset was unsuccessful (e.g. if a randomized state caused an error in the
         simulation), this method should indicate such a failure by returning False.
@@ -173,4 +173,7 @@ class RobotEnv(gym.GoalEnv):
         print('*****************************reloading_model**********************')
         model = mujoco_py.load_model_from_path(fullpath)
         self.sim = mujoco_py.MjSim(model, nsubsteps=self.n_substeps)
+
+    def set_object_pos(self, object_xpos):
+        pass
 

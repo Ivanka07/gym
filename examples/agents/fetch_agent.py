@@ -50,14 +50,12 @@ def add_goal_to_env_xml(goal, center_of_mass=[]):
 
 
 
-
-
 print('Current gym version =', gym.__version__)
-env = gym.make('FetchReach-v1')
+env = gym.make('FetchPickAndPlace-v1')
 o = env.reset()
 print('Observation space= ', env.observation_space)
 print('Action space=', env.action_space.shape)
-
+print('o=', o)
 while True:
 	env.render()
 #policy = joblib.load('/home/ivanna/mt_data/experiments/gail/gail_her_model')
